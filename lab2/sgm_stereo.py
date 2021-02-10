@@ -1,190 +1,149 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[27]:
-
-
-import numpy as np
-from numba import njit
-from functionality import *
-import matplotlib.pyplot as plt
-from skimage.io import imread
 import time
+import argparse
+import numpy as np
+import cv2
+from numba import njit
+import matplotlib.pyplot as plt
 from PIL import Image
 
 
-# In[28]:
+def set_params(x_range, y_range):
+
+    mindx, maxdx = x_range
+    mindy, maxdy = y_range
+    disp_x = np.arange(mindx, maxdx+1, 1)
+    disp_y = np.arange(mindy, maxdy+1, 1)
+    X2D, Y2D = np.meshgrid(disp_y, disp_x)
+    disparity_vec = np.column_stack((X2D.ravel(), Y2D.ravel()))
+
+    return disparity_vec
 
 
-imleft = np.array(Image.open('test_images/im0.ppm').convert('L')).astype(float)#imread('test_images/im1.png',as_gray=True).astype("float")
-imright = np.array(Image.open('test_images/im1.ppm').convert('L')).astype(float)#imread('test_images/im2.png',as_gray=True).astype("float")
-height,width = imleft.shape
+@njit(fastmath=True, nogil=True)
+def calculate_q(left, right, disparity_vec):
+    height, width = left.shape
+    n_labels = disparity_vec.shape[0]
+    Q = np.full((height, width, n_labels), -np.inf)
+    for i in range(height):
+        for j in range(width):
+            for index, d in enumerate(disparity_vec):
+                if 0 <= i-d[0] < height and 0 <= j-d[1] < width:
+                    Q[i, j, index] = -abs(left[i, j] - right[i-d[0], j-d[1]])
+    return Q
 
-
-# In[29]:
-
-
-mindx,maxdx = 0,20
-mindy,maxdy = 0,0
-smooth = 1
-
-
-# In[30]:
-
-
-disp_x = np.arange(mindx, maxdx+1, 1)
-disp_y = np.arange(mindy,maxdy+1, 1)
-X2D,Y2D = np.meshgrid(disp_y,disp_x)
-disparity_vec = np.column_stack((X2D.ravel(),Y2D.ravel()))
-
-
-# In[31]:
-
-
-n_labels = disparity_vec.shape[0]
-n_labels
-
-
-# In[32]:
-
-
-Q = np.full((height,width,n_labels),-np.inf)
-for i in range(height):
-    for j in range(width):
-        for index, d in enumerate(disparity_vec):
-            if 0 <= i-d[0] < height and 0 <= j-d[1] < width:
-                Q[i,j,index] = -abs(imleft[i,j]-imright[i-d[0],j-d[1]])
-
-
-# In[33]:
-
-
-def calc_g(d1,d2,mapping):
-    vec1 = mapping[d1]
-    vec2 = mapping[d2]
-    return np.linalg.norm(vec1-vec2)
-
-
-# In[34]:
-
-
-g = np.full((n_labels,n_labels),-1)
-for i in range(n_labels):
-    for j in range(n_labels):
-        g[i,j] = calc_g(i,j,disparity_vec)
-g = -g*smooth
-
-
-# In[35]:
-
+def calc_g(smooth_coef, mapping):
+    n_labels = mapping.shape[0]
+    g = np.full((n_labels, n_labels), -1)
+    for i in range(n_labels):
+        for j in range(n_labels):
+            vec1 = mapping[i]
+            vec2 = mapping[j]
+            g[i, j] = np.linalg.norm(vec1-vec2)
+    return -smooth_coef*g
 
 @njit(fastmath=True, cache=True)
-def init(height,width,n_labels,Q,g,P):
+def init(height, width, n_labels, Q, g, P):
     # for each pixel of input channel
     # going from bottom-right to top-left pixel
-    for i in np.arange(height-2,-1,-1):
-        for j in np.arange(width-2,-1,-1):
+    for i in np.arange(height-2, -1, -1):
+        for j in np.arange(width-2, -1, -1):
             # for each label in pixel
             for k in range(n_labels):
                 # P[i,j,1,k] - Right direction
                 # P[i,j,3,k] - Down direction
                 # calculate best path weight according to formula
-                P[i,j,3,k] = max(P[i+1,j,3,:] + Q[i+1,j,:] + g[k,:])
-                P[i,j,1,k] = max(P[i,j+1,1,:] + Q[i,j+1,:] + g[k,:])
+                P[i, j, 3, k] = max(P[i+1, j, 3, :] + Q[i+1, j, :] + g[k, :])
+                P[i, j, 1, k] = max(P[i, j+1, 1, :] + Q[i, j+1, :] + g[k, :])
     return P
 
-
-# In[36]:
-
-
 @njit(fastmath=True, cache=True)
-def forward_pass(height,width,n_labels,Q,g,P):
+def forward_pass(height, width, n_labels, Q, g, P):
     # for each pixel of input channel
-    for i in range(1,height):
-        for j in range(1,width):
+    for i in range(1, height):
+        for j in range(1, width):
             # for each label in pixel
             for k in range(n_labels):
                 # P[i,j,0,k] - Left direction
                 # P[i,j,2,k] - Up direction
                 # calculate best path weight according to formula
-                P[i,j,0,k] = max(P[i,j-1,0,:] + Q[i,j-1,:] + g[:,k])
-                P[i,j,2,k] = max(P[i-1,j,2,:] + Q[i-1,j,:] + g[:,k])
-            
+                P[i, j, 0, k] = max(P[i, j-1, 0, :] + Q[i, j-1, :] + g[:, k])
+                P[i, j, 2, k] = max(P[i-1, j, 2, :] + Q[i-1, j, :] + g[:, k])
+
     return P
 
 
-# In[45]:
 
+def sgm(imleft,imright,smooth,disparity_vec):
+    n_labels = disparity_vec.shape[0]
+    height,width = imleft.shape
 
-P = np.zeros((height,width,4,n_labels))
+    Q = calculate_q(imleft, imright, disparity_vec)
+    g = calc_g(smooth, disparity_vec)
 
+    P = np.zeros((height, width, 4, n_labels))
+    P = init(height, width, n_labels, Q, g, P)
+    P = forward_pass(height, width, n_labels, Q, g, P)
 
-# In[46]:
-
-
-P = init(height,width,n_labels,Q,g,P)
-
-
-# In[47]:
-
-
-P = forward_pass(height,width,n_labels,Q,g,P)
-
-
-# In[48]:
-
-
-optimal_labelling = np.argmax(P[:,:,0,:] + P[:,:,1,:] + P[:,:,2,:] + P[:,:,3,:] + Q,axis=2)
-
-
-# In[49]:
-
-
-plt.figure(figsize=(20,20))
-plt.axis('off')
-plt.imshow(optimal_labelling,cmap='gray')
-
-
-# In[42]:
-
-
-len(optimal_labelling[optimal_labelling==0])
-
-
-# In[43]:
-
-
-pic = np.linalg.norm(disparity_vec[optimal_labelling],axis=2)
-
-
-# In[44]:
-
-
-plt.figure(figsize=(20,20))
-plt.axis('off')
-plt.imshow(pic,cmap='gray')
-
-
-# In[ ]:
+    optimal_labelling = np.argmax(
+        P[:, :, 0, :] + P[:, :, 1, :] + P[:, :, 2, :] + P[:, :, 3, :] + Q, axis=2)
+    return optimal_labelling
 
 
 
 
 
-# In[ ]:
+def cart2pol(x, y):
+    theta = np.arctan2(y, x)
+    rho = np.hypot(x, y)
+    return theta, rho
 
 
 
+def main():
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("left_image", type=str, help="path to left image")
+    parser.add_argument("right_image", type=str, help="path to right image")
+    parser.add_argument("smoothing_coef", type=float, help="smoothing coefficient for binary penalties")
+    parser.add_argument("min_dx", type=int, help="min value for horizontal disparity")
+    parser.add_argument("max_dx", type=int, help="max value for horizontal disparity")
+    parser.add_argument("min_dy", type=int, help="min value for vertical disparity")
+    parser.add_argument("max_dy", type=int, help="max value for vertical disparity")
+    args = parser.parse_args()
 
 
-# In[ ]:
+    imleft = np.array(Image.open(args.left_image).convert('L')).astype(float)
+    imright = np.array(Image.open(args.right_image).convert('L')).astype(float)
+
+    x_range = (args.min_dx, args.max_dx)
+    y_range = (args.min_dy, args.max_dy)
+    
+    a = time.time()
+    disparity_vec = set_params(x_range, y_range)
+    optimal_labelling = sgm(imleft,imright,args.smoothing_coef,disparity_vec)
+    print('total time: ', np.round(time.time() - a,4), 'sec')
+
+    
+    # create hsv image
+
+    flow = disparity_vec[optimal_labelling]
+
+    magnitude, ang = cart2pol(flow[:,:,0],flow[:,:,1])
+
+    hsv = np.empty((imleft.shape[0], imleft.shape[1],3),dtype=np.uint8)
+    hsv[..., 1] = 127
+    hsv[..., 0] = ang * 180 / np.pi / 2
+    hsv[..., 2] = cv2.normalize(magnitude, None, 0, 255, cv2.NORM_MINMAX)
+    bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
 
 
 
+    plt.figure(figsize=(20, 20))
+    plt.axis('off')
+    plt.imshow(bgr)
+    plt.show()      
 
 
-# In[ ]:
 
-
-
-
+if __name__ == "__main__":
+    main()
