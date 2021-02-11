@@ -8,7 +8,17 @@ from PIL import Image
 
 
 def set_params(x_range, y_range):
-
+    '''
+    Parameters
+        x_range: tuple
+            disparity of X axis
+        y_range: tuple
+            disparity of Y axis
+    Returns
+        disparity_vec: ndarray
+            array of disparity vectors
+    calculates disparity_vec
+    '''
     mindx, maxdx = x_range
     mindy, maxdy = y_range
     disp_x = np.arange(mindx, maxdx+1, 1)
@@ -21,28 +31,74 @@ def set_params(x_range, y_range):
 
 @njit(fastmath=True, nogil=True)
 def calculate_q(left, right, disparity_vec):
+    '''
+    Parameters
+        left: ndarray
+            left image
+        right: ndarray
+            right image
+    Returns
+        Q: ndarray
+            unary penalties
+    calculates unary penalties
+    '''
     height, width = left.shape
     n_labels = disparity_vec.shape[0]
     Q = np.full((height, width, n_labels), -np.inf)
     for i in range(height):
         for j in range(width):
             for index, d in enumerate(disparity_vec):
+                # fill only pixels with possible disparity
                 if 0 <= i-d[0] < height and 0 <= j-d[1] < width:
                     Q[i, j, index] = -abs(left[i, j] - right[i-d[0], j-d[1]])
     return Q
 
+
 def calc_g(smooth_coef, mapping):
+    '''
+    Parameters
+        smooth_coef: float
+            smoothing coefficient
+        mapping: dissparit
+            array of disparity vectors
+    Returns
+        g: ndarray
+            binary penalties
+    calculates binary penalties
+    '''
     n_labels = mapping.shape[0]
     g = np.full((n_labels, n_labels), -1)
     for i in range(n_labels):
         for j in range(n_labels):
             vec1 = mapping[i]
             vec2 = mapping[j]
+            # calculate norm of difference
             g[i, j] = np.linalg.norm(vec1-vec2)
     return -smooth_coef*g
 
+
 @njit(fastmath=True, cache=True)
 def init(height, width, n_labels, Q, g, P):
+        '''
+    Parameters
+        height: int
+            height of input image
+        width: int
+            width of input image
+        n_labels: int
+            number of labels in labelset
+        Q: ndarray
+            array of unary penalties
+        g: ndarray
+            array of binary penalties
+        P: ndarray
+            array consist of best path weight for each direction
+                (Left,Right,Up,Down)
+    Returns
+        P: ndarray
+            updated P
+    updates P
+    '''
     # for each pixel of input channel
     # going from bottom-right to top-left pixel
     for i in np.arange(height-2, -1, -1):
@@ -58,6 +114,25 @@ def init(height, width, n_labels, Q, g, P):
 
 @njit(fastmath=True, cache=True)
 def forward_pass(height, width, n_labels, Q, g, P):
+    '''
+    Parameters
+        height: int
+            height of input image 
+        width: int
+            width of input image 
+        n_labels: int
+            number of labels in labelset
+        Q: ndarray
+            array of unary penalties
+        g: ndarray
+            array of binary penalties
+        P: ndarray
+            array consist of best path weight for each direction (Left,Right,Up,Down)
+    Returns
+        P: ndarray
+            array consist of best path weight for each direction (Left,Right,Up,Down)
+    updates P
+    '''
     # for each pixel of input channel
     for i in range(1, height):
         for j in range(1, width):
@@ -74,6 +149,21 @@ def forward_pass(height, width, n_labels, Q, g, P):
 
 
 def sgm(imleft,imright,smooth,disparity_vec):
+    '''
+    Parameters
+        imleft: ndarray
+            left image
+        imright: ndarray
+            right image
+        smooth: float
+            smoothing coefficient for binary penalties
+        disparity_vec: ndarray
+            array of disparity vectors
+    Returns
+        optimal_labelling: ndarray
+            optimal labelling after SGM algorithm
+    performs SGM algorithm for given penalties
+    '''
     n_labels = disparity_vec.shape[0]
     height,width = imleft.shape
 
@@ -93,6 +183,19 @@ def sgm(imleft,imright,smooth,disparity_vec):
 
 
 def cart2pol(x, y):
+    '''
+    Parameters
+        x: int
+            x coordinate in cartesian notion
+        y: int 
+            y coordinate in cartesian notion
+    Returns
+        theta: float
+            angle coordinate in polar system
+        rho: float
+            norm of (x,y) vector
+    transform cartesian coordinates to polar
+    '''
     theta = np.arctan2(y, x)
     rho = np.hypot(x, y)
     return theta, rho
@@ -100,7 +203,7 @@ def cart2pol(x, y):
 
 
 def main():
-
+    # parse input parameters
     parser = argparse.ArgumentParser()
     parser.add_argument("left_image", type=str, help="path to left image")
     parser.add_argument("right_image", type=str, help="path to right image")
@@ -118,6 +221,7 @@ def main():
     x_range = (args.min_dx, args.max_dx)
     y_range = (args.min_dy, args.max_dy)
     
+    # perform sgm and get optimal labelling
     a = time.time()
     disparity_vec = set_params(x_range, y_range)
     optimal_labelling = sgm(imleft,imright,args.smoothing_coef,disparity_vec)
@@ -125,7 +229,7 @@ def main():
 
     
     # create hsv image
-
+    # plot disparities (vector in each pixel) as hsv image
     flow = disparity_vec[optimal_labelling]
 
     magnitude, ang = cart2pol(flow[:,:,0],flow[:,:,1])
