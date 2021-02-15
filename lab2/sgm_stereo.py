@@ -79,7 +79,7 @@ def calc_g(smooth_coef, mapping):
 
 @njit(fastmath=True, cache=True)
 def init(height, width, n_labels, Q, g, P):
-        '''
+    '''
     Parameters
         height: int
             height of input image
