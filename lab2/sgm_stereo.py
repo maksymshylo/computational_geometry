@@ -101,8 +101,8 @@ def init(height, width, n_labels, Q, g, P):
     '''
     # for each pixel of input channel
     # going from bottom-right to top-left pixel
-    for i in np.arange(height-2, -1, -1):
-        for j in np.arange(width-2, -1, -1):
+    for i in range( height-2,-1, -1):
+        for j in range( width-2,-1, -1):
             # for each label in pixel
             for k in range(n_labels):
                 # P[i,j,1,k] - Right direction
@@ -228,24 +228,15 @@ def main():
     print('total time: ', np.round(time.time() - a,4), 'sec')
 
     
-    # create hsv image
-    # plot disparities (vector in each pixel) as hsv image
-    flow = disparity_vec[optimal_labelling]
-
-    magnitude, ang = cart2pol(flow[:,:,0],flow[:,:,1])
-
-    hsv = np.empty((imleft.shape[0], imleft.shape[1],3),dtype=np.uint8)
-    hsv[..., 1] = 127
-    hsv[..., 0] = ang * 180 / np.pi / 2
-    hsv[..., 2] = cv2.normalize(magnitude, None, 0, 255, cv2.NORM_MINMAX)
-    bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+    output_image = np.linalg.norm(disparity_vec[optimal_labelling],axis=2)
 
 
+    plt.imsave('disparity_map.png',output_image,cmap='gray')
 
-    plt.figure(figsize=(20, 20))
-    plt.axis('off')
-    plt.imshow(bgr)
-    plt.show()      
+    #plt.figure(figsize=(20, 20))
+    #plt.axis('off')
+    #plt.imshow(bgr)
+    #plt.show()      
 
 
 
