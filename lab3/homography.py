@@ -52,11 +52,12 @@ def apply_homography(H,src):
     coords = np.zeros((src.shape[0],src.shape[1],2))
     for i in range(src.shape[0]):
         for j in range(src.shape[1]):
-            coords[i,j,:] = (H@np.array([i,j,1]))[:-1] 
+            unnorm = H@np.array([j,i,1])
+            coords[i,j,:] = (unnorm/unnorm[-1])[:-1]
     # new coordimates after homography
     coords = coords.reshape(-1,2)
     # interpolate colors
-    warped = interpolate(src, coords[:,1], coords[:,0])
+    warped = interpolate(src, coords[:,0], coords[:,1])
     warped = warped.reshape(src.shape)
     warped = warped.astype(np.uint8)
     return warped
