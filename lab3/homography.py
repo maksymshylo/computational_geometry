@@ -174,7 +174,7 @@ def stitch_images(img1, img2, H):
                               [0, 0, 1]])
     # stitch 2 images
     output_img = apply_homography(
-        img2, H_translation@H, ((x_max-x_min)*2, (y_max-y_min)*2))
+        img2, H_translation@H, ( y_max-y_min,x_max-x_min))
     output_img[-y_min:rows1-y_min, -x_min:cols1-x_min] = img1
     # crop black edges
     output_img = crop(output_img)
