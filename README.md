@@ -19,3 +19,12 @@ python3 lab3/homography.py lab3/test_images lab3/test_images MAX_ITER  PATH_OUT_
 
 python3 lab3/homography.py lab3/test_images/book_1.png lab3/test_images/book_2.png 2000 lab3/test_images/out.png
 ```
+## Lab 4 - Panorama view with Tree Reweighted Message Passing (TRW-S) as a stitching method
+#### Examples
+Important: the first image for input is the base image for applying homography
+```bash
+python3 lab4/panorama.py trws_n_iter images
+
+python3 lab4/panorama.py 5 lab4/test_images/book2.jpg lab4/ttest_images/book1.jpg lab4/test_images/book3.jpg
+python3 lab4/panorama.py 5 lab4/test_images/ball2.jpg lab4/test_images/ball3.jpg lab4/test_images/ball1.jpg
+```
