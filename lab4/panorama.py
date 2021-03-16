@@ -2,7 +2,8 @@ import sys
 import numpy as np
 import cv2
 from numba import njit
-from time import time 
+from time import time
+from numpy.linalg import norm as numpy_norm
 from trws_algorithm import *
 
 
@@ -112,7 +113,7 @@ def ransac(src_pts, dst_pts, ransacReprojThreshold=5, maxIters=2000):
             unnorm = H_current@src_pts[i][0]
             normalized = (unnorm/unnorm[-1])
             # calculate norm
-            normalized = custom_norm(normalized-dst_pts[i][0])
+            normalized = numpy_norm(normalized-dst_pts[i][0])
             # check solution
             if normalized < ransacReprojThreshold:
                 count_matches += 1
@@ -159,8 +160,8 @@ def aligning(input_images):
     # edge points from all images
     merged_points = merged_points.reshape(-1,2)
 
-    min_x, max_x = int(min(merged_points[:,0])), int(max(merged_points[:,0]))
-    min_y, max_y = int(min(merged_points[:,1])), int(max(merged_points[:,1]))
+    min_x, max_x = int(min(merged_points[:,0])-1), int(max(merged_points[:,0])+1)
+    min_y, max_y = int(min(merged_points[:,1])-1), int(max(merged_points[:,1])+1)
 
     aligned_base = np.zeros((max_y-min_y,max_x-min_x,3),dtype=int)
     aligned_base[-min_y:-min_y +base_image.shape[0],-min_x:-min_x + base_image.shape[1]] = base_image 
