@@ -44,13 +44,14 @@ def find_essential_matrix(F, K):
     # calculate Essential matrix
     E = K.T@F@K
     U, S, Vt = np.linalg.svd(E)
+    Vt = Vt.T
     # update sigma to make sigma1=sigma2>0 and sigma3=0
     S1 = np.identity(E.shape[0])
     S1 = (S[0]+S[1])*0.5*S1
     S1[-1,-1] = 0
     updated_E = U@S1@Vt
     # calculate translation and rotation
-    t = ((S1[0,0] + S1[1,1])*0.5)*det(U)*Vt[:,2]
+    t = ((S1[0,0] + S1[1,1])*0.5)*det(U)*Vt[2,:]
     W = np.array([[0,1,0],[-1,0,0],[0,0,1]])
     R = det(U)*U@W@Vt*det(Vt)
     
