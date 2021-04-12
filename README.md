@@ -38,3 +38,11 @@ python3 lab5/fundamental_matrix.py lab5/test_images/mount1.jpeg lab5/test_images
 python3 lab5/fundamental_matrix.py lab5/test_images/messL.png lab5/test_images/messR.png 1 1000
 
 ```
+## Lab 6 - Finding Essential Matrix with Fundamental Matrix and Camera Intrinsics Parameters
+#### Examples
+```bash
+python3 lab6/essential_matrix.py left_image right_image epsilon_in_pixels number_of_iterations pixel_size_in_microns
+
+python3 lab6/essential_matrix.py left_image right_image 1 1000 0.8
+
+```
